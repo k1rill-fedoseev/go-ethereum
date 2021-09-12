@@ -32,6 +32,10 @@ import (
 	"text/template"
 	"time"
 
+	pcsclite "github.com/gballet/go-libpcsclite"
+	gopsutil "github.com/shirou/gopsutil/mem"
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -67,9 +71,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
-	pcsclite "github.com/gballet/go-libpcsclite"
-	gopsutil "github.com/shirou/gopsutil/mem"
-	"gopkg.in/urfave/cli.v1"
 )
 
 func init() {
@@ -1763,6 +1764,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
+		} else {
+			cfg.NetworkId = ctx.Uint64(NetworkIdFlag.Name)
 		}
 		cfg.SyncMode = downloader.FullSync
 		// Create new developer account or reuse existing one
@@ -1794,7 +1797,17 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		log.Info("Using developer account", "address", developer.Address)
 
 		// Create a new developer genesis block or reuse existing one
-		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), ctx.GlobalUint64(DeveloperGasLimitFlag.Name), developer.Address)
+		var ttd *big.Int
+		if ctx.GlobalIsSet(OverrideTerminalTotalDifficulty.Name) {
+			ttd = GlobalBig(ctx, OverrideTerminalTotalDifficulty.Name)
+		}
+		cfg.Genesis = core.DeveloperGenesisBlock(
+			uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)),
+			ctx.GlobalUint64(DeveloperGasLimitFlag.Name),
+			developer.Address,
+			big.NewInt(int64(cfg.NetworkId)),
+			ttd,
+		)
 		if ctx.GlobalIsSet(DataDirFlag.Name) {
 			// If datadir doesn't exist we need to open db in write-mode
 			// so leveldb can create files.
